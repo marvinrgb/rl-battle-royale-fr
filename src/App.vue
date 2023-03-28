@@ -4,12 +4,24 @@ import Button from './components/Button.vue';
 import { io } from 'socket.io-client';
 import { ref } from 'vue';
 import "leaflet/dist/leaflet.css"
-import { LMap, LTileLayer } from '@vue-leaflet/vue-leaflet';
+import { LMap, LTileLayer, LMarker, LCircleMarker } from '@vue-leaflet/vue-leaflet';
 let socket = io("ws://localhost:3000");
 
 const refdata = ref({
   'state' : 'mid'
 });
+
+navigator.geolocation.getCurrentPosition((pos) => {
+  console.log(pos)
+  refdata.value.coords = [
+    pos.coords.latitude,
+    pos.coords.longitude
+  ]
+  refdata.value.main_center = [
+    pos.coords.latitude,
+    pos.coords.longitude
+  ]
+})
 
 let zoom = 16;
 
@@ -44,6 +56,11 @@ socket.on('game-joined', (data) => {
   refdata.value.players = data.players
   console.log(data)
 })
+
+function startGame() {
+  socket.emit('start-game', (refdata.value.coords));
+}
+
 </script>
 
 
@@ -55,19 +72,25 @@ socket.on('game-joined', (data) => {
   </div>
   <div v-else-if="refdata.state == 'lobby'" id="lobby-game-screen" class="screen">
      <h1 id="lobby-code">Game {{ refdata.code }}</h1>
-     <Button id="lobby-start-game" text="Start Game" />
+     <Button @click="startGame()" id="lobby-start-game" text="Start Game" />
      <Player v-for="player in refdata.players" :name="player.username"/>
   </div>
   <div v-else-if="refdata.state == 'mid'" id="mid-game-screen" class="screen">
-     <div style="height:60vh; width:100vw">
-      <l-map ref="map" v-model:zoom="zoom" :center="[50.599, 8.417]">
-        <l-tile-layer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          layer-type="base"
-          name="OpenStreetMap"
-        ></l-tile-layer>
-      </l-map>
-     </div>
+    <div v-if="refdata.main_center">
+      <div style="height:60vh; width:100vw">
+       <l-map :use-global-leaflet="false" ref="map" v-model:zoom="zoom" :center="refdata.main_center">
+         <l-tile-layer
+           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+           layer-type="base"
+           name="OpenStreetMap"
+         ></l-tile-layer>
+         <l-circle-marker color="#00f" :radius="4" :lat-lng="refdata.coords"></l-circle-marker>
+       </l-map>
+      </div>
+    </div>
+    <div v-else style="background-color: black; height: 100vh;">
+      loading...
+    </div>
   </div>
   <div v-else-if="refdata.state == 'post'" id="post-game-screen" class="screen">
      
