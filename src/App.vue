@@ -4,11 +4,16 @@ import Button from './components/Button.vue';
 import { io } from 'socket.io-client';
 import { ref } from 'vue';
 import "leaflet/dist/leaflet.css"
-import { LMap, LTileLayer, LMarker, LCircleMarker } from '@vue-leaflet/vue-leaflet';
+import { LMap, LTileLayer, LMarker, LCircleMarker, LCircle } from '@vue-leaflet/vue-leaflet';
 let socket = io("ws://localhost:3000");
 
 const refdata = ref({
-  'state' : 'mid'
+  'state' : 'pre',
+  'circles' : [],
+  'survivors' : [{
+    'username' : 'horst',
+    'coords' : [1, 1]
+  }]
 });
 
 navigator.geolocation.getCurrentPosition((pos) => {
@@ -23,7 +28,7 @@ navigator.geolocation.getCurrentPosition((pos) => {
   ]
 })
 
-let zoom = 16;
+let zoom = 15;
 
 window.localStorage.getItem('player_id') ? signIn() : signUp();
 
@@ -61,6 +66,15 @@ function startGame() {
   socket.emit('start-game', (refdata.value.coords));
 }
 
+socket.on('start-game', (data) => {
+  refdata.value.state = 'mid';
+  refdata.value.circles.push({
+    'coords' : data.coords,
+    'radius' : data.radius,
+    'color' : '#f00'
+  })
+})
+
 </script>
 
 
@@ -79,13 +93,23 @@ function startGame() {
     <div v-if="refdata.main_center">
       <div style="height:60vh; width:100vw">
        <l-map :use-global-leaflet="false" ref="map" v-model:zoom="zoom" :center="refdata.main_center">
-         <l-tile-layer
-           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-           layer-type="base"
-           name="OpenStreetMap"
-         ></l-tile-layer>
-         <l-circle-marker color="#00f" :radius="4" :lat-lng="refdata.coords"></l-circle-marker>
+          <l-tile-layer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            layer-type="base"
+            name="OpenStreetMap"
+          ></l-tile-layer>
+          <l-circle v-if="refdata.circles[0]" :lat-lng="refdata.circles[0].coords" :radius="refdata.circles[0].radius" :color="refdata.circles[0].color">
+            
+          </l-circle>
+          <l-circle-marker color="#00f" :radius="4" :lat-lng="refdata.coords"></l-circle-marker>
        </l-map>
+      </div>
+      <div id="mid-lower-area">
+        <table id="survivor-table">
+          <tr v-for="survivor in refdata.survivors">
+            <td>{{ survivor.username }}</td>
+          </tr>
+        </table>
       </div>
     </div>
     <div v-else style="background-color: black; height: 100vh;">
@@ -99,6 +123,18 @@ function startGame() {
 
 
 <style scoped>
+#survivor-table {
+  height: fit-content;
+  width: 30%;
+}
+
+
+#mid-lower-area {
+  height: 40vh;
+  width: 100vw;
+}
+
+
 #lobby-start-game {
   margin-bottom: 5vh;
 }
