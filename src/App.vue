@@ -2,7 +2,7 @@
 import Player from './components/Player.vue';
 import Button from './components/Button.vue';
 import { io } from 'socket.io-client';
-import { ref } from 'vue';
+import { ref, watchEffect } from 'vue';
 import "leaflet/dist/leaflet.css"
 import { LMap, LTileLayer, LMarker, LCircleMarker, LCircle } from '@vue-leaflet/vue-leaflet';
 let socket = io("ws://localhost:3000");
@@ -10,22 +10,22 @@ let socket = io("ws://localhost:3000");
 const refdata = ref({
   'state' : 'pre',
   'circles' : [],
-  'survivors' : [{
-    'username' : 'horst',
-    'coords' : [1, 1]
-  }]
+  'survivors' : [],
+  'coords' : {}
 });
 
-navigator.geolocation.getCurrentPosition((pos) => {
-  console.log(pos)
-  refdata.value.coords = [
-    pos.coords.latitude,
-    pos.coords.longitude
-  ]
-  refdata.value.main_center = [
-    pos.coords.latitude,
-    pos.coords.longitude
-  ]
+watchEffect((v) => {
+  navigator.geolocation.getCurrentPosition((pos) => {
+    console.log(pos)
+    refdata.value.coords = [
+      pos.coords.latitude,
+      pos.coords.longitude
+    ]
+    refdata.value.main_center = [
+      pos.coords.latitude,
+      pos.coords.longitude
+    ]
+  })
 })
 
 let zoom = 15;
@@ -50,6 +50,10 @@ socket.on('reset-client-auth', () => {
   location.reload();
 })
 
+function createGame() {
+  socket.emit('create-game', refdata.value.coords)
+}
+
 function joinGame() {
   let code = prompt('Game Code: ');
   socket.emit('join-game', ({ 'code' : code }));
@@ -67,12 +71,21 @@ function startGame() {
 }
 
 socket.on('start-game', (data) => {
+  console.log(data)
   refdata.value.state = 'mid';
-  refdata.value.circles.push({
-    'coords' : data.coords,
-    'radius' : data.radius,
-    'color' : '#f00'
-  })
+  refdata.value.circles = data.circles
+  setInterval(() => {
+    for (let i = 0; i < refdata.value.circles.length; i++) {
+      if (Date.now() >= refdata.value.circles[i].start) {
+        refdata.value.circles[i].active = true;
+      }
+    }
+    console.log(refdata.value.circles)
+  }, 1000)
+})
+
+socket.on('reconnect', (game) => {
+  refdata.value.circles = game.circles
 })
 
 </script>
@@ -81,7 +94,7 @@ socket.on('start-game', (data) => {
 <template>
   <div v-if="refdata.state == 'pre'" id="pre-game-screen" class="screen">
     <h1 class="pre-heading">Reallife Battle Royale</h1>
-    <Button @click="socket.emit('create-game')" text="Create Game"/>
+    <Button @click="createGame()" text="Create Game"/>
     <Button @click="joinGame()" text="Join Game"/>
   </div>
   <div v-else-if="refdata.state == 'lobby'" id="lobby-game-screen" class="screen">
@@ -98,7 +111,7 @@ socket.on('start-game', (data) => {
             layer-type="base"
             name="OpenStreetMap"
           ></l-tile-layer>
-          <l-circle v-if="refdata.circles[0]" :lat-lng="refdata.circles[0].coords" :radius="refdata.circles[0].radius" :color="refdata.circles[0].color">
+          <l-circle v-for="circle in refdata.circles"  :lat-lng="circle.center" :radius="circle.radius" :color="(circle.active == true) ? circle.color : '#00000000'">
             
           </l-circle>
           <l-circle-marker color="#00f" :radius="4" :lat-lng="refdata.coords"></l-circle-marker>
